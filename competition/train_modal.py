@@ -6,6 +6,7 @@ app = modal.App("ncf-train")
 
 image = (
     modal.Image.debian_slim(python_version="3.11")
+    .apt_install("git")
     .pip_install(
         "torch", "sentence-transformers", "datasets",
         "huggingface_hub", "scikit-learn", "scipy", "tqdm",
