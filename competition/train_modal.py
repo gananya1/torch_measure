@@ -1,6 +1,4 @@
-# competition/train_modal.py
 import modal
-import os
 
 app = modal.App("ncf-train")
 
@@ -13,23 +11,13 @@ image = (
         "pandas", "pyarrow",
     )
     .pip_install("git+https://github.com/gananya1/torch_measure.git@competition")
+    .add_local_dir("competition", remote_path="/competition")
 )
 
 volume = modal.Volume.from_name("ncf-outputs", create_if_missing=True)
 
-# Mount local competition/ folder directly into the container at /competition
-competition_mount = modal.Mount.from_local_dir(
-    local_path="competition",
-    remote_path="/competition",
-)
-
-@app.function(
-    image=image,
-    gpu="A10G",
-    timeout=7200,
-    volumes={"/outputs": volume},
-    mounts=[competition_mount],
-)
+@app.function(image=image, gpu="A10G", timeout=7200,
+              volumes={"/outputs": volume})
 def train():
     import subprocess, shutil
 

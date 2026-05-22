@@ -2,7 +2,6 @@
 
 Usage (from the torch_measure repo root):
     python -m competition.train_ncf
-    python -m competition.train_ncf --encoder BAAI/bge-large-en-v1.5 --embed-dim 1024 --epochs 15
 """
 from __future__ import annotations
 
@@ -43,10 +42,8 @@ def parse_args() -> argparse.Namespace:
     return p.parse_args()
 
 
-# ---------------------------------------------------------------------------
-# Render subject_content exactly as the hosted runtime does (from README).
+# Render subject_content as hosted runtime does (from README).
 # The training strings must match test-time strings or cache lookups will miss.
-# ---------------------------------------------------------------------------
 def render_subject_content(subject: dict, fallback_subject_id: str) -> str:
     display_name = subject.get("display_name") or fallback_subject_id
     lines = [f"Name: {display_name}"]
@@ -66,9 +63,7 @@ def main() -> None:
     args = parse_args()
     os.makedirs("competition", exist_ok=True)
 
-    # ------------------------------------------------------------------
     # 1. Download the full dataset snapshot (HF cache, skipped on re-run)
-    # ------------------------------------------------------------------
     print("Downloading measurement-db snapshot …")
     snap = snapshot_download(
         repo_id="aims-foundations/measurement-db",
@@ -100,10 +95,8 @@ def main() -> None:
         ignore_index=True,
     ).dropna(subset=["response"])
 
-    # ------------------------------------------------------------------
-    # 2. Deduplicate exactly as the README specifies:
+    # 2. Deduplicate as the README specifies:
     #    keep only the smallest trial per (subject_id, item_id, test_condition)
-    # ------------------------------------------------------------------
     trials = (trials
               .sort_values("trial")
               .groupby(["subject_id", "item_id", "test_condition"], as_index=False)
@@ -113,9 +106,7 @@ def main() -> None:
     trials = trials[trials["response"].isin([0.0, 1.0])].copy()
     print(f"Total binary training rows after dedup: {len(trials):,}")
 
-    # ------------------------------------------------------------------
     # 3. Build text fields that match what predict() receives at test time
-    # ------------------------------------------------------------------
     def to_training_example(row: pd.Series) -> dict:
         item      = items_by_id.get(row["item_id"], {})
         subject   = subjects_by_id.get(row["subject_id"], {})
@@ -138,9 +129,7 @@ def main() -> None:
     item_texts    = [ex["item_content"]    for ex in examples]
     labels        = torch.tensor([ex["label"] for ex in examples], dtype=torch.float32)
 
-    # ------------------------------------------------------------------
     # 4. Build the NCF model and encode
-    # ------------------------------------------------------------------
     encoder = SentenceTransformer(args.encoder)
     model = NCF(
         encoder=encoder,
@@ -161,10 +150,8 @@ def main() -> None:
         torch.save({"subject_embeddings": U, "item_embeddings": V}, emb_path)
         print(f"Saved embeddings → {emb_path}")
 
-    # ------------------------------------------------------------------
     # 5. Build subject_content → embedding lookup for predict()'s cache.
     #    Deduplicate: one vector per unique subject_content string.
-    # ------------------------------------------------------------------
     seen: dict[str, int] = {}
     for i, s in enumerate(subject_texts):
         if s not in seen:
@@ -175,9 +162,7 @@ def main() -> None:
         pickle.dump(subject_cache, f)
     print(f"Saved subject cache ({len(subject_cache)} entries) → {args.subject_cache_output}")
 
-    # ------------------------------------------------------------------
     # 6. Train the MLP head
-    # ------------------------------------------------------------------
     X       = torch.cat([U, V], dim=-1).to(args.device)
     labels  = labels.to(args.device)
     dataset = TensorDataset(X, labels)
