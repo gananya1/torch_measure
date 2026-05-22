@@ -20,9 +20,15 @@ volume = modal.Volume.from_name("ncf-outputs", create_if_missing=True)
 @app.function(image=image, gpu="A10G", timeout=7200,
               volumes={"/outputs": volume})
 def train():
-    import subprocess, shutil
+    import subprocess, shutil, os
+    # Find where torch_measure was installed and run train_ncf.py directly
+    import torch_measure
+    pkg_dir = os.path.dirname(os.path.dirname(torch_measure.__file__))
+    train_script = os.path.join(pkg_dir, "competition", "train_ncf.py")
+    centroid_script = os.path.join(pkg_dir, "competition", "fit_centroids.py")
+
     subprocess.run([
-        "python", "-m", "competition.train_ncf",
+        "python", train_script,
         "--encoder",               "all-MiniLM-L6-v2",
         "--embed-dim",             "384",
         "--epochs",                "10",
@@ -30,9 +36,8 @@ def train():
         "--subject-cache-output",  "/outputs/subject_cache.pkl",
         "--embeddings-checkpoint", "/outputs/ncf_embeddings.pt",
     ], check=True)
-    subprocess.run([
-        "python", "-m", "competition.fit_centroids",
-    ], check=True)
+
+    subprocess.run(["python", centroid_script], check=True)
     shutil.copy("competition/centroids.npy", "/outputs/centroids.npy")
 
 @app.local_entrypoint()
