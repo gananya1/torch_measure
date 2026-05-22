@@ -14,7 +14,7 @@ import torch
 from huggingface_hub import snapshot_download
 from sentence_transformers import SentenceTransformer
 
-from torch_measure.models import NCF
+from ncf import NCF
 
 # Module-level init — runs once when the container starts.
 _HERE = os.path.dirname(os.path.abspath(__file__))
