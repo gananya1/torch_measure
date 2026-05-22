@@ -1,6 +1,6 @@
 # competition/train_modal.py
-"""Run train_ncf.py and fit_centroids.py on a Modal GPU, then download outputs."""
 import modal
+import os
 
 app = modal.App("ncf-train")
 
@@ -17,18 +17,24 @@ image = (
 
 volume = modal.Volume.from_name("ncf-outputs", create_if_missing=True)
 
-@app.function(image=image, gpu="A10G", timeout=7200,
-              volumes={"/outputs": volume})
+# Mount local competition/ folder directly into the container at /competition
+competition_mount = modal.Mount.from_local_dir(
+    local_path="competition",
+    remote_path="/competition",
+)
+
+@app.function(
+    image=image,
+    gpu="A10G",
+    timeout=7200,
+    volumes={"/outputs": volume},
+    mounts=[competition_mount],
+)
 def train():
-    import subprocess, shutil, os
-    # Find where torch_measure was installed and run train_ncf.py directly
-    import torch_measure
-    pkg_dir = os.path.dirname(os.path.dirname(torch_measure.__file__))
-    train_script = os.path.join(pkg_dir, "competition", "train_ncf.py")
-    centroid_script = os.path.join(pkg_dir, "competition", "fit_centroids.py")
+    import subprocess, shutil
 
     subprocess.run([
-        "python", train_script,
+        "python", "/competition/train_ncf.py",
         "--encoder",               "all-MiniLM-L6-v2",
         "--embed-dim",             "384",
         "--epochs",                "10",
@@ -37,8 +43,8 @@ def train():
         "--embeddings-checkpoint", "/outputs/ncf_embeddings.pt",
     ], check=True)
 
-    subprocess.run(["python", centroid_script], check=True)
-    shutil.copy("competition/centroids.npy", "/outputs/centroids.npy")
+    subprocess.run(["python", "/competition/fit_centroids.py"], check=True)
+    shutil.copy("/competition/centroids.npy", "/outputs/centroids.npy")
 
 @app.local_entrypoint()
 def main():
